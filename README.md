@@ -139,8 +139,7 @@ valid for the lifetime of callback. You can also `read()` into a heap allocated
 buffer to avoid copying memory around if this fits your application.
 
 Reading headers may be a tricky task if you read/parse headers partially.
-Basically, you need to remember whether last header callback was field or value
-and apply following logic:
+You can apply the following logic:
 
     (on_header_field and on_header_value shortened to on_h_*)
      ------------------------ ------------ --------------------------------------------
@@ -149,7 +148,7 @@ and apply following logic:
     | nothing (first call)   | on_h_field | Allocate new buffer and copy callback data |
     |                        |            | into it                                    |
      ------------------------ ------------ --------------------------------------------
-    | value                  | on_h_field | New header started.                        |
+    | value_complete         | on_h_field | New header started.                        |
     |                        |            | Copy current name,value buffers to headers |
     |                        |            | list and allocate new buffer for new name  |
      ------------------------ ------------ --------------------------------------------
@@ -162,9 +161,19 @@ and apply following logic:
     | value                  | on_h_value | Value continues. Reallocate value buffer   |
     |                        |            | and append callback data to it             |
      ------------------------ ------------ --------------------------------------------
+    | value                  | on_h_value | Current header complete. You can use the   |
+    |                        | _complete  | field and value collected so far.          |
+     ------------------------ ------------ --------------------------------------------
+    | field                  | on_h_value | Current header complete. You can use the   |
+    |                        | _complete  | field and value collected so far.          |
+    |                        |            | The header has no value.                   |
+     ------------------------ ------------ --------------------------------------------
+
+
 
 
 See examples of reading in headers:
+(out of date, to be updated)
 
 * [partial example](http://gist.github.com/155877) in C
 * [from http-parser tests](http://github.com/ry/http-parser/blob/37a0ff8928fb0d83cec0d0d8909c5a4abcd221af/test.c#L403) in C

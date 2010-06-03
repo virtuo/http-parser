@@ -51,7 +51,6 @@ struct message {
   char body[MAX_ELEMENT_SIZE];
   size_t body_size;
   int num_headers;
-  enum { NONE=0, FIELD, VALUE } last_header_element;
   char headers [MAX_HEADERS][2][MAX_ELEMENT_SIZE];
   int should_keep_alive;
 
@@ -721,6 +720,43 @@ const struct message responses[] =
   ,.body= ""
   }
 
+#define BONJOUR_MADAME_FR 8
+/* The client should not merge two headers fields when the first one doesn't
+ * have a value.
+ */
+, {.name= "bonjourmadame.fr"
+  ,.type= HTTP_RESPONSE
+  ,.raw= "HTTP/1.0 301 Moved Permanently\r\n"
+         "Date: Thu, 03 Jun 2010 09:56:32 GMT\r\n"
+         "Server: Apache/2.2.3 (Red Hat)\r\n"
+         "Cache-Control: public\r\n"
+         "Pragma: \r\n"
+         "Location: http://www.bonjourmadame.fr/\r\n"
+         "Vary: Accept-Encoding\r\n"
+         "Content-Length: 0\r\n"
+         "Content-Type: text/html; charset=UTF-8\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 0
+  ,.status_code= 301
+  ,.num_headers= 9
+  ,.headers=
+    { { "Date", "Thu, 03 Jun 2010 09:56:32 GMT" }
+    , { "Server", "Apache/2.2.3 (Red Hat)" }
+    , { "Cache-Control", "public" }
+    , { "Pragma", "" }
+    , { "Location", "http://www.bonjourmadame.fr/" }
+    , { "Vary",  "Accept-Encoding" }
+    , { "Content-Length", "0" }
+    , { "Content-Type", "text/html; charset=UTF-8" }
+    , { "Connection", "keep-alive" }
+    }
+  ,.body= ""
+  }
+
 , {.name= NULL } /* sentinel */
 };
 
@@ -762,12 +798,7 @@ header_field_cb (http_parser *p, const char *buf, size_t len)
   assert(p == parser);
   struct message *m = &messages[num_messages];
 
-  if (m->last_header_element != FIELD)
-    m->num_headers++;
-
-  strncat(m->headers[m->num_headers-1][0], buf, len);
-
-  m->last_header_element = FIELD;
+  strncat(m->headers[m->num_headers][0], buf, len);
 
   return 0;
 }
@@ -778,10 +809,16 @@ header_value_cb (http_parser *p, const char *buf, size_t len)
   assert(p == parser);
   struct message *m = &messages[num_messages];
 
-  strncat(m->headers[m->num_headers-1][1], buf, len);
+  strncat(m->headers[m->num_headers][1], buf, len);
 
-  m->last_header_element = VALUE;
+  return 0;
+}
 
+int
+header_value_complete_cb (http_parser *p)
+{
+  assert(p == parser);
+  messages[num_messages].num_headers++;
   return 0;
 }
 
@@ -849,6 +886,7 @@ static http_parser_settings settings =
   {.on_message_begin = message_begin_cb
   ,.on_header_field = header_field_cb
   ,.on_header_value = header_value_cb
+  ,.on_header_value_complete = header_value_complete_cb
   ,.on_path = request_path_cb
   ,.on_url = request_url_cb
   ,.on_fragment = fragment_cb
@@ -862,6 +900,7 @@ static http_parser_settings settings_count_body =
   {.on_message_begin = message_begin_cb
   ,.on_header_field = header_field_cb
   ,.on_header_value = header_value_cb
+  ,.on_header_value_complete = header_value_complete_cb
   ,.on_path = request_path_cb
   ,.on_url = request_url_cb
   ,.on_fragment = fragment_cb
